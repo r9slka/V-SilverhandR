@@ -2,6 +2,8 @@ const messagesEl = document.getElementById('messages');
 const inputEl = document.getElementById('input');
 const sendBtn = document.getElementById('send-btn');
 
+const history = [];
+
 function addMessage(text, sender) {
   const wrapper = document.createElement('div');
   wrapper.classList.add('message', sender);
@@ -13,18 +15,44 @@ function addMessage(text, sender) {
   wrapper.appendChild(bubble);
   messagesEl.appendChild(wrapper);
   messagesEl.scrollTop = messagesEl.scrollHeight;
+  return bubble;
 }
 
-function sendMessage() {
+function setLoading(bubble, on) {
+  bubble.textContent = on ? '...' : '';
+}
+
+async function sendMessage() {
   const text = inputEl.value.trim();
   if (!text) return;
 
   addMessage(text, 'user');
+  history.push({ role: 'user', text });
   inputEl.value = '';
+  sendBtn.disabled = true;
+  inputEl.disabled = true;
 
-  setTimeout(() => {
-    addMessage('Memory systems offline. Standing by.', 'v');
-  }, 600);
+  const loadingBubble = addMessage('...', 'v');
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, history: history.slice(0, -1) })
+    });
+
+    const data = await res.json();
+    const reply = data.reply ?? "Something went wrong.";
+
+    loadingBubble.textContent = reply;
+    history.push({ role: 'model', text: reply });
+  } catch {
+    loadingBubble.textContent = "Couldn't reach V. Check your connection.";
+  } finally {
+    sendBtn.disabled = false;
+    inputEl.disabled = false;
+    inputEl.focus();
+  }
 }
 
 sendBtn.addEventListener('click', sendMessage);
