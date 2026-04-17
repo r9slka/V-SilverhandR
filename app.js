@@ -42,7 +42,7 @@ async function sendMessage() {
     });
 
     const data = await res.json();
-    const reply = data.reply ?? "Something went wrong.";
+    const reply = data.reply ?? `Error: ${data.error ?? 'Unknown error'}`;
 
     loadingBubble.textContent = reply;
     history.push({ role: 'model', text: reply });
