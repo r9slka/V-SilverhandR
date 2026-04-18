@@ -10,54 +10,50 @@ module.exports = async function handler(req, res) {
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    console.error('GEMINI_API_KEY is not set');
+    console.error('API key is not set');
     return res.status(500).json({ error: 'API key not configured' });
   }
 
-  let message, history;
-  try {
-    message = req.body?.message;
-    history = req.body?.history || [];
-  } catch (e) {
-    console.error('Body parse error:', e);
-    return res.status(400).json({ error: 'Invalid request body' });
-  }
+  const message = req.body?.message;
+  const history = req.body?.history || [];
 
   if (!message) return res.status(400).json({ error: 'No message provided' });
 
-  const contents = [];
+  const messages = [{ role: 'system', content: SYSTEM_PROMPT }];
+
   for (const turn of history) {
     if (turn.role && turn.text) {
-      contents.push({ role: turn.role, parts: [{ text: turn.text }] });
+      const role = turn.role === 'model' ? 'assistant' : turn.role;
+      messages.push({ role, content: turn.text });
     }
   }
-  contents.push({ role: 'user', parts: [{ text: message }] });
+  messages.push({ role: 'user', content: message });
 
-  const requestBody = {
-    system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-    contents
-  };
-
-  let geminiRes;
+  let groqRes;
   try {
-    geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
-      }
-    );
+    groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'llama3-8b-8192',
+        messages,
+        temperature: 0.85,
+        max_tokens: 512
+      })
+    });
   } catch (e) {
     console.error('Fetch failed:', e.message);
-    return res.status(500).json({ error: 'Failed to reach Gemini: ' + e.message });
+    return res.status(500).json({ error: 'Failed to reach Groq: ' + e.message });
   }
 
-  const rawText = await geminiRes.text();
+  const rawText = await groqRes.text();
 
-  if (!geminiRes.ok) {
-    console.error('Gemini error status:', geminiRes.status, rawText);
-    return res.status(502).json({ error: `Gemini ${geminiRes.status}: ${rawText.slice(0, 200)}` });
+  if (!groqRes.ok) {
+    console.error('Groq error:', groqRes.status, rawText);
+    return res.status(502).json({ error: `Groq ${groqRes.status}: ${rawText.slice(0, 200)}` });
   }
 
   let data;
@@ -65,13 +61,13 @@ module.exports = async function handler(req, res) {
     data = JSON.parse(rawText);
   } catch (e) {
     console.error('JSON parse error:', rawText);
-    return res.status(500).json({ error: 'Bad response from Gemini' });
+    return res.status(500).json({ error: 'Bad response from Groq' });
   }
 
-  const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  const reply = data?.choices?.[0]?.message?.content;
   if (!reply) {
     console.error('No reply in response:', JSON.stringify(data));
-    return res.status(500).json({ error: 'Empty reply from Gemini' });
+    return res.status(500).json({ error: 'Empty reply from Groq' });
   }
 
   return res.status(200).json({ reply });
