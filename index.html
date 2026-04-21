@@ -8,23 +8,68 @@
 </head>
 <body>
   <div id="app">
+
+    <!-- Header -->
     <header id="header">
       <span id="header-title">V Silverhand</span>
-      <span id="header-status">online</span>
+      <div id="header-right">
+        <span id="header-status">online</span>
+        <button id="memory-btn" title="Memory">🧠</button>
+      </div>
     </header>
 
+    <!-- Chat messages -->
     <div id="messages">
       <div class="message v">
         <div class="bubble">Hey. I'm V Silverhand. I'm yours. What's on your mind?</div>
       </div>
     </div>
 
+    <!-- Input bar -->
     <div id="input-bar">
+      <label id="upload-btn" title="Upload file">
+        📎
+        <input type="file" id="file-input" accept=".pdf,.jpg,.jpeg,.png,.webp" />
+      </label>
       <input id="input" type="text" placeholder="Message V..." autocomplete="off" />
       <button id="send-btn">Send</button>
     </div>
+
   </div>
 
+  <!-- Memory Panel Overlay -->
+  <div id="memory-overlay">
+    <div id="memory-panel">
+      <div class="panel-header">
+        <span class="panel-title">Memory</span>
+        <button id="close-panel-btn">✕</button>
+      </div>
+      <div class="panel-body">
+
+        <!-- About Me section -->
+        <div class="panel-section">
+          <div class="section-label">About Me</div>
+          <p class="section-desc">Notes V always remembers about you.</p>
+          <div id="notes-list"></div>
+          <div class="add-note-row">
+            <textarea id="new-note-input" placeholder="e.g. I'm 28, I live in Paris, I work in sales" rows="2"></textarea>
+            <button id="add-note-btn">Add</button>
+          </div>
+        </div>
+
+        <!-- Memories section -->
+        <div class="panel-section">
+          <div class="section-label">Conversation History</div>
+          <p class="section-desc">Everything V remembers from your chats.</p>
+          <div id="memories-list"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- PDF.js for text extraction -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
