@@ -2,8 +2,6 @@ const messagesEl = document.getElementById('messages');
 const inputEl = document.getElementById('input');
 const sendBtn = document.getElementById('send-btn');
 
-const history = [];
-
 function addMessage(text, sender) {
   const wrapper = document.createElement('div');
   wrapper.classList.add('message', sender);
@@ -18,8 +16,24 @@ function addMessage(text, sender) {
   return bubble;
 }
 
-function setLoading(bubble, on) {
-  bubble.textContent = on ? '...' : '';
+// Load conversation history from Supabase on startup
+async function loadHistory() {
+  try {
+    const res = await fetch('/api/history');
+    const data = await res.json();
+
+    if (data.messages && data.messages.length > 0) {
+      // Remove the default welcome bubble before loading history
+      messagesEl.innerHTML = '';
+      for (const msg of data.messages) {
+        const sender = msg.role === 'user' ? 'user' : 'v';
+        addMessage(msg.content, sender);
+      }
+    }
+  } catch (err) {
+    console.error('Could not load history:', err);
+    // Leave the welcome message in place if history fails
+  }
 }
 
 async function sendMessage() {
@@ -27,7 +41,6 @@ async function sendMessage() {
   if (!text) return;
 
   addMessage(text, 'user');
-  history.push({ role: 'user', text });
   inputEl.value = '';
   sendBtn.disabled = true;
   inputEl.disabled = true;
@@ -38,14 +51,13 @@ async function sendMessage() {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, history: history.slice(0, -1) })
+      body: JSON.stringify({ message: text })
     });
 
     const data = await res.json();
     const reply = data.reply ?? `Error: ${data.error ?? 'Unknown error'}`;
-
     loadingBubble.textContent = reply;
-    history.push({ role: 'model', text: reply });
+
   } catch {
     loadingBubble.textContent = "Couldn't reach V. Check your connection.";
   } finally {
@@ -63,3 +75,6 @@ inputEl.addEventListener('keydown', (e) => {
     sendMessage();
   }
 });
+
+// Load history when the page opens
+loadHistory();
