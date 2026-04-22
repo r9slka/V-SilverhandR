@@ -1,4 +1,9 @@
-// ─── Elements ───────────────────────────────────────────────────────────────
+// ─── Elements ────────────────────────────────────────────────────────────────
+const loginScreen  = document.getElementById('login-screen');
+const loginEmail   = document.getElementById('login-email');
+const loginBtn     = document.getElementById('login-btn');
+const loginMsg     = document.getElementById('login-msg');
+const appEl        = document.getElementById('app');
 const messagesEl   = document.getElementById('messages');
 const inputEl      = document.getElementById('input');
 const sendBtn      = document.getElementById('send-btn');
@@ -10,6 +15,7 @@ const memoriesList = document.getElementById('memories-list');
 const newNoteInput = document.getElementById('new-note-input');
 const addNoteBtn   = document.getElementById('add-note-btn');
 const fileInput    = document.getElementById('file-input');
+const logoutBtn    = document.getElementById('logout-btn');
 
 // PDF.js worker
 if (typeof pdfjsLib !== 'undefined') {
@@ -17,10 +23,99 @@ if (typeof pdfjsLib !== 'undefined') {
     'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 }
 
-// Pending file attachment
-let pendingFile = null; // { fileType, fileData, fileName }
+// ─── State ────────────────────────────────────────────────────────────────────
+let sbClient = null;
+let currentSession = null;
+let pendingFile = null;
 
-// ─── Chat helpers ────────────────────────────────────────────────────────────
+// ─── Auth helpers ─────────────────────────────────────────────────────────────
+function authHeaders(extra = {}) {
+  const token = currentSession?.access_token;
+  return { ...extra, ...(token ? { 'Authorization': `Bearer ${token}` } : {}) };
+}
+
+// ─── Init: load config then auth ─────────────────────────────────────────────
+async function init() {
+  try {
+    const cfg = await fetch('/api/config').then(r => r.json());
+    sbClient = supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+
+    // Handle auth state changes (including magic link callback)
+    sbClient.auth.onAuthStateChange((event, session) => {
+      currentSession = session;
+      if (session) showApp();
+      else showLogin();
+    });
+
+    // Check existing session
+    const { data: { session } } = await sbClient.auth.getSession();
+    currentSession = session;
+    if (session) showApp();
+    else showLogin();
+
+  } catch (err) {
+    console.error('Init error:', err);
+    showLogin();
+  }
+}
+
+function showLogin() {
+  appEl.classList.add('hidden');
+  loginScreen.style.display = 'flex';
+}
+
+function showApp() {
+  loginScreen.style.display = 'none';
+  appEl.classList.remove('hidden');
+  loadHistory();
+  registerSW();
+}
+
+// ─── Login ────────────────────────────────────────────────────────────────────
+loginBtn.addEventListener('click', async () => {
+  const email = loginEmail.value.trim();
+  if (!email) { setLoginMsg('Enter your email address.', true); return; }
+
+  loginBtn.disabled = true;
+  setLoginMsg('Sending...');
+
+  try {
+    const { error } = await sbClient.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin }
+    });
+    if (error) throw error;
+    setLoginMsg('Magic link sent! Check your email.');
+  } catch (err) {
+    setLoginMsg(err.message || 'Something went wrong.', true);
+  } finally {
+    loginBtn.disabled = false;
+  }
+});
+
+loginEmail.addEventListener('keydown', e => {
+  if (e.key === 'Enter') loginBtn.click();
+});
+
+function setLoginMsg(text, isError = false) {
+  loginMsg.textContent = text;
+  loginMsg.className = isError ? 'error' : '';
+}
+
+// ─── Logout ───────────────────────────────────────────────────────────────────
+logoutBtn.addEventListener('click', async () => {
+  closePanel();
+  await sbClient.auth.signOut();
+});
+
+// ─── Service Worker ───────────────────────────────────────────────────────────
+function registerSW() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(console.error);
+  }
+}
+
+// ─── Chat ─────────────────────────────────────────────────────────────────────
 function addMessage(text, sender) {
   const wrapper = document.createElement('div');
   wrapper.classList.add('message', sender);
@@ -44,10 +139,9 @@ function addFileBubble(fileName) {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
-// ─── Load chat history on startup ────────────────────────────────────────────
 async function loadHistory() {
   try {
-    const res = await fetch('/api/history');
+    const res = await fetch('/api/history', { headers: authHeaders() });
     const data = await res.json();
     if (data.messages && data.messages.length > 0) {
       messagesEl.innerHTML = '';
@@ -56,11 +150,10 @@ async function loadHistory() {
       }
     }
   } catch (err) {
-    console.error('Could not load history:', err);
+    console.error('History load failed:', err);
   }
 }
 
-// ─── Send message ─────────────────────────────────────────────────────────────
 async function sendMessage() {
   const text = inputEl.value.trim();
   if (!text && !pendingFile) return;
@@ -69,10 +162,9 @@ async function sendMessage() {
   if (text) addMessage(text, 'user');
 
   inputEl.value = '';
+  inputEl.placeholder = 'Message V...';
   sendBtn.disabled = true;
   inputEl.disabled = true;
-
-  const loadingBubble = addMessage('...', 'v');
 
   const body = { message: text };
   if (pendingFile) {
@@ -82,10 +174,12 @@ async function sendMessage() {
   }
   pendingFile = null;
 
+  const loadingBubble = addMessage('...', 'v');
+
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(body)
     });
     const data = await res.json();
@@ -100,7 +194,7 @@ async function sendMessage() {
 }
 
 sendBtn.addEventListener('click', sendMessage);
-inputEl.addEventListener('keydown', (e) => {
+inputEl.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
 
@@ -109,10 +203,9 @@ fileInput.addEventListener('change', async () => {
   const file = fileInput.files[0];
   if (!file) return;
   fileInput.value = '';
-
   const ext = file.name.split('.').pop().toLowerCase();
 
-  if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
+  if (['jpg','jpeg','png','webp'].includes(ext)) {
     const base64 = await fileToBase64(file);
     pendingFile = { fileType: 'image', fileData: base64, fileName: file.name };
     inputEl.placeholder = `📎 ${file.name} — type a message or hit Send`;
@@ -141,13 +234,13 @@ function fileToBase64(file) {
 }
 
 async function extractPdfText(file) {
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
   let text = '';
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    text += content.items.map(item => item.str).join(' ') + '\n';
+    text += content.items.map(it => it.str).join(' ') + '\n';
   }
   return text.trim();
 }
@@ -155,7 +248,7 @@ async function extractPdfText(file) {
 // ─── Memory Panel ─────────────────────────────────────────────────────────────
 memoryBtn.addEventListener('click', openPanel);
 closePanelBtn.addEventListener('click', closePanel);
-overlay.addEventListener('click', (e) => { if (e.target === overlay) closePanel(); });
+overlay.addEventListener('click', e => { if (e.target === overlay) closePanel(); });
 
 function openPanel() {
   overlay.classList.add('open');
@@ -167,65 +260,36 @@ function closePanel() {
 }
 
 async function loadPanel() {
-  notesList.innerHTML = '<p class="empty-state">Loading...</p>';
+  notesList.innerHTML    = '<p class="empty-state">Loading...</p>';
   memoriesList.innerHTML = '<p class="empty-state">Loading...</p>';
-
   try {
-    const [notesRes, memoriesRes] = await Promise.all([
-      fetch('/api/notes'),
-      fetch('/api/memory')
+    const [nr, mr] = await Promise.all([
+      fetch('/api/notes',  { headers: authHeaders() }).then(r => r.json()),
+      fetch('/api/memory', { headers: authHeaders() }).then(r => r.json())
     ]);
-    const notesData    = await notesRes.json();
-    const memoriesData = await memoriesRes.json();
-    renderNotes(notesData.notes ?? []);
-    renderMemories(memoriesData.messages ?? []);
-  } catch (err) {
-    notesList.innerHTML = '<p class="empty-state">Failed to load.</p>';
+    renderNotes(nr.notes ?? []);
+    renderMemories(mr.messages ?? []);
+  } catch {
+    notesList.innerHTML    = '<p class="empty-state">Failed to load.</p>';
     memoriesList.innerHTML = '<p class="empty-state">Failed to load.</p>';
   }
 }
 
 // ─── Notes ────────────────────────────────────────────────────────────────────
 function renderNotes(notes) {
-  if (!notes.length) {
-    notesList.innerHTML = '<p class="empty-state">No notes yet.</p>';
-    return;
-  }
-  notesList.innerHTML = '';
-  for (const note of notes) {
-    notesList.appendChild(buildNoteCard(note));
-  }
+  notesList.innerHTML = notes.length ? '' : '<p class="empty-state">No notes yet.</p>';
+  notes.forEach(n => notesList.appendChild(buildNoteCard(n)));
 }
 
 function buildNoteCard(note) {
   const card = document.createElement('div');
   card.classList.add('card');
-  card.dataset.id = note.id;
-
-  const content = document.createElement('div');
-  content.classList.add('card-content');
-  content.textContent = note.content;
-
-  const footer = document.createElement('div');
-  footer.classList.add('card-footer');
-
-  const date = document.createElement('span');
-  date.classList.add('card-date');
-  date.textContent = formatDate(note.created_at);
-
-  const actions = document.createElement('div');
-  actions.classList.add('card-actions');
-
-  const editBtn = document.createElement('button');
-  editBtn.classList.add('card-btn');
-  editBtn.textContent = 'Edit';
-  editBtn.addEventListener('click', () => startEditNote(card, note));
-
-  const delBtn = document.createElement('button');
-  delBtn.classList.add('card-btn', 'delete');
-  delBtn.textContent = 'Delete';
-  delBtn.addEventListener('click', () => deleteNote(note.id, card));
-
+  const content = el('div', 'card-content', note.content);
+  const footer  = document.createElement('div'); footer.classList.add('card-footer');
+  const date    = el('span', 'card-date', fmtDate(note.created_at));
+  const actions = document.createElement('div'); actions.classList.add('card-actions');
+  const editBtn = btn('Edit', 'card-btn', () => startEditNote(card, note));
+  const delBtn  = btn('Delete', 'card-btn delete', () => deleteNote(note.id, card));
   actions.append(editBtn, delBtn);
   footer.append(date, actions);
   card.append(content, footer);
@@ -234,148 +298,83 @@ function buildNoteCard(note) {
 
 function startEditNote(card, note) {
   card.innerHTML = '';
-
-  const textarea = document.createElement('textarea');
-  textarea.classList.add('card-edit-area');
-  textarea.value = note.content;
-  textarea.rows = 3;
-
-  const saveBtn = document.createElement('button');
-  saveBtn.classList.add('card-save-btn');
-  saveBtn.textContent = 'Save';
-  saveBtn.addEventListener('click', async () => {
-    const newContent = textarea.value.trim();
-    if (!newContent) return;
-    await fetch('/api/notes', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: note.id, content: newContent })
-    });
-    note.content = newContent;
-    card.replaceWith(buildNoteCard(note));
+  const ta = textarea(note.content, 3);
+  const save = btn('Save', 'card-save-btn', async () => {
+    const v = ta.value.trim(); if (!v) return;
+    await fetch('/api/notes', { method: 'PUT', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({id:note.id,content:v}) });
+    note.content = v; card.replaceWith(buildNoteCard(note));
   });
-
-  card.append(textarea, saveBtn);
-  textarea.focus();
+  card.append(ta, save); ta.focus();
 }
 
 async function deleteNote(id, card) {
-  await fetch(`/api/notes?id=${id}`, { method: 'DELETE' });
+  await fetch(`/api/notes?id=${id}`, { method: 'DELETE', headers: authHeaders() });
   card.remove();
-  if (!notesList.querySelector('.card')) {
-    notesList.innerHTML = '<p class="empty-state">No notes yet.</p>';
-  }
+  if (!notesList.querySelector('.card')) notesList.innerHTML = '<p class="empty-state">No notes yet.</p>';
 }
 
 addNoteBtn.addEventListener('click', async () => {
-  const content = newNoteInput.value.trim();
-  if (!content) return;
+  const content = newNoteInput.value.trim(); if (!content) return;
   newNoteInput.value = '';
-  const res = await fetch('/api/notes', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content })
-  });
+  const res  = await fetch('/api/notes', { method: 'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({content}) });
   const data = await res.json();
   if (data.note) {
-    const empty = notesList.querySelector('.empty-state');
-    if (empty) empty.remove();
+    notesList.querySelector('.empty-state')?.remove();
     notesList.appendChild(buildNoteCard(data.note));
   }
 });
 
 // ─── Memories ─────────────────────────────────────────────────────────────────
 function renderMemories(messages) {
-  if (!messages.length) {
-    memoriesList.innerHTML = '<p class="empty-state">No conversation history yet.</p>';
-    return;
-  }
-  memoriesList.innerHTML = '';
-  // Show newest first in the panel
-  for (const msg of [...messages].reverse()) {
-    memoriesList.appendChild(buildMemoryCard(msg));
-  }
+  memoriesList.innerHTML = messages.length ? '' : '<p class="empty-state">No conversation history yet.</p>';
+  [...messages].reverse().forEach(m => memoriesList.appendChild(buildMemoryCard(m)));
 }
 
 function buildMemoryCard(msg) {
-  const card = document.createElement('div');
-  card.classList.add('card');
-  card.dataset.id = msg.id;
-
-  const content = document.createElement('div');
-  content.classList.add('card-content');
-  content.textContent = msg.content;
-  if (content.textContent.length > 200) {
-    content.textContent = content.textContent.slice(0, 200) + '…';
-  }
-
-  const footer = document.createElement('div');
-  footer.classList.add('card-footer');
-
-  const info = document.createElement('span');
-  info.classList.add('card-date');
-  info.textContent = `${msg.role === 'user' ? 'You' : 'V'} · ${formatDate(msg.created_at)}`;
-
-  const actions = document.createElement('div');
-  actions.classList.add('card-actions');
-
-  const editBtn = document.createElement('button');
-  editBtn.classList.add('card-btn');
-  editBtn.textContent = 'Edit';
-  editBtn.addEventListener('click', () => startEditMemory(card, msg));
-
-  const delBtn = document.createElement('button');
-  delBtn.classList.add('card-btn', 'delete');
-  delBtn.textContent = 'Delete';
-  delBtn.addEventListener('click', () => deleteMemory(msg.id, card));
-
-  actions.append(editBtn, delBtn);
-  footer.append(info, actions);
+  const card    = document.createElement('div'); card.classList.add('card');
+  const preview = msg.content.length > 200 ? msg.content.slice(0,200)+'…' : msg.content;
+  const content = el('div', 'card-content', preview);
+  const footer  = document.createElement('div'); footer.classList.add('card-footer');
+  const info    = el('span', 'card-date', `${msg.role==='user'?'You':'V'} · ${fmtDate(msg.created_at)}`);
+  const actions = document.createElement('div'); actions.classList.add('card-actions');
+  const editBtn = btn('Edit', 'card-btn', () => startEditMemory(card, msg));
+  const delBtn  = btn('Delete', 'card-btn delete', () => deleteMemory(msg.id, card));
+  actions.append(editBtn, delBtn); footer.append(info, actions);
   card.append(content, footer);
   return card;
 }
 
 function startEditMemory(card, msg) {
   card.innerHTML = '';
-
-  const textarea = document.createElement('textarea');
-  textarea.classList.add('card-edit-area');
-  textarea.value = msg.content;
-  textarea.rows = 3;
-
-  const saveBtn = document.createElement('button');
-  saveBtn.classList.add('card-save-btn');
-  saveBtn.textContent = 'Save';
-  saveBtn.addEventListener('click', async () => {
-    const newContent = textarea.value.trim();
-    if (!newContent) return;
-    await fetch('/api/memory', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: msg.id, content: newContent })
-    });
-    msg.content = newContent;
-    card.replaceWith(buildMemoryCard(msg));
+  const ta = textarea(msg.content, 3);
+  const save = btn('Save', 'card-save-btn', async () => {
+    const v = ta.value.trim(); if (!v) return;
+    await fetch('/api/memory', { method: 'PUT', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({id:msg.id,content:v}) });
+    msg.content = v; card.replaceWith(buildMemoryCard(msg));
   });
-
-  card.append(textarea, saveBtn);
-  textarea.focus();
+  card.append(ta, save); ta.focus();
 }
 
 async function deleteMemory(id, card) {
-  await fetch(`/api/memory?id=${id}`, { method: 'DELETE' });
+  await fetch(`/api/memory?id=${id}`, { method: 'DELETE', headers: authHeaders() });
   card.remove();
-  if (!memoriesList.querySelector('.card')) {
-    memoriesList.innerHTML = '<p class="empty-state">No conversation history yet.</p>';
-  }
+  if (!memoriesList.querySelector('.card')) memoriesList.innerHTML = '<p class="empty-state">No conversation history yet.</p>';
 }
 
-// ─── Utility ──────────────────────────────────────────────────────────────────
-function formatDate(iso) {
+// ─── DOM helpers ──────────────────────────────────────────────────────────────
+function el(tag, cls, text) {
+  const e = document.createElement(tag); e.className = cls; if (text) e.textContent = text; return e;
+}
+function btn(text, cls, onClick) {
+  const b = document.createElement('button'); b.className = cls; b.textContent = text; b.addEventListener('click', onClick); return b;
+}
+function textarea(value, rows) {
+  const t = document.createElement('textarea'); t.className = 'card-edit-area'; t.value = value; t.rows = rows; return t;
+}
+function fmtDate(iso) {
   if (!iso) return '';
-  const d = new Date(iso);
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleDateString(undefined, {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
 }
 
-// ─── Init ─────────────────────────────────────────────────────────────────────
-loadHistory();
+// ─── Start ────────────────────────────────────────────────────────────────────
+init();

@@ -4,12 +4,35 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>V Silverhand</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#0d0d0d" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  <meta name="apple-mobile-web-app-title" content="V" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id="app">
 
-    <!-- Header -->
+  <!-- ── Login Screen ──────────────────────────────────── -->
+  <div id="login-screen">
+    <div id="login-box">
+      <div id="login-logo">V</div>
+      <div id="login-title">V Silverhand</div>
+      <div id="login-sub">Your private AI companion.</div>
+      <input id="login-email" type="email" placeholder="your@email.com" autocomplete="email" />
+      <button id="login-btn">Send Magic Link</button>
+      <p id="login-msg"></p>
+    </div>
+  </div>
+
+  <!-- ── Main App ──────────────────────────────────────── -->
+  <div id="app" class="hidden">
+
     <header id="header">
       <span id="header-title">V Silverhand</span>
       <div id="header-right">
@@ -18,16 +41,14 @@
       </div>
     </header>
 
-    <!-- Chat messages -->
     <div id="messages">
       <div class="message v">
         <div class="bubble">Hey. I'm V Silverhand. I'm yours. What's on your mind?</div>
       </div>
     </div>
 
-    <!-- Input bar -->
     <div id="input-bar">
-      <label id="upload-btn" title="Upload file">
+      <label id="upload-btn" title="Attach file">
         📎
         <input type="file" id="file-input" accept=".pdf,.jpg,.jpeg,.png,.webp" />
       </label>
@@ -37,7 +58,7 @@
 
   </div>
 
-  <!-- Memory Panel Overlay -->
+  <!-- ── Memory Panel ──────────────────────────────────── -->
   <div id="memory-overlay">
     <div id="memory-panel">
       <div class="panel-header">
@@ -46,7 +67,6 @@
       </div>
       <div class="panel-body">
 
-        <!-- About Me section -->
         <div class="panel-section">
           <div class="section-label">About Me</div>
           <p class="section-desc">Notes V always remembers about you.</p>
@@ -57,19 +77,25 @@
           </div>
         </div>
 
-        <!-- Memories section -->
         <div class="panel-section">
           <div class="section-label">Conversation History</div>
           <p class="section-desc">Everything V remembers from your chats.</p>
           <div id="memories-list"></div>
         </div>
 
+        <div class="panel-footer">
+          <button id="logout-btn">Sign out</button>
+        </div>
+
       </div>
     </div>
   </div>
 
-  <!-- PDF.js for text extraction -->
+  <!-- Supabase JS -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <!-- PDF.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
   <script src="app.js"></script>
 </body>
 </html>
