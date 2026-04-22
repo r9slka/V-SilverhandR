@@ -1,9 +1,4 @@
 // ─── Elements ────────────────────────────────────────────────────────────────
-const loginScreen  = document.getElementById('login-screen');
-const loginEmail   = document.getElementById('login-email');
-const loginBtn     = document.getElementById('login-btn');
-const loginMsg     = document.getElementById('login-msg');
-const appEl        = document.getElementById('app');
 const messagesEl   = document.getElementById('messages');
 const inputEl      = document.getElementById('input');
 const sendBtn      = document.getElementById('send-btn');
@@ -15,7 +10,6 @@ const memoriesList = document.getElementById('memories-list');
 const newNoteInput = document.getElementById('new-note-input');
 const addNoteBtn   = document.getElementById('add-note-btn');
 const fileInput    = document.getElementById('file-input');
-const logoutBtn    = document.getElementById('logout-btn');
 
 // PDF.js worker
 if (typeof pdfjsLib !== 'undefined') {
@@ -23,97 +17,7 @@ if (typeof pdfjsLib !== 'undefined') {
     'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 }
 
-// ─── State ────────────────────────────────────────────────────────────────────
-let sbClient = null;
-let currentSession = null;
 let pendingFile = null;
-
-// ─── Auth helpers ─────────────────────────────────────────────────────────────
-function authHeaders(extra = {}) {
-  const token = currentSession?.access_token;
-  return { ...extra, ...(token ? { 'Authorization': `Bearer ${token}` } : {}) };
-}
-
-// ─── Init: load config then auth ─────────────────────────────────────────────
-async function init() {
-  try {
-    const cfg = await fetch('/api/config').then(r => r.json());
-    sbClient = supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
-
-    // Handle auth state changes (including magic link callback)
-    sbClient.auth.onAuthStateChange((event, session) => {
-      currentSession = session;
-      if (session) showApp();
-      else showLogin();
-    });
-
-    // Check existing session
-    const { data: { session } } = await sbClient.auth.getSession();
-    currentSession = session;
-    if (session) showApp();
-    else showLogin();
-
-  } catch (err) {
-    console.error('Init error:', err);
-    showLogin();
-  }
-}
-
-function showLogin() {
-  appEl.classList.add('hidden');
-  loginScreen.style.display = 'flex';
-}
-
-function showApp() {
-  loginScreen.style.display = 'none';
-  appEl.classList.remove('hidden');
-  loadHistory();
-  registerSW();
-}
-
-// ─── Login ────────────────────────────────────────────────────────────────────
-loginBtn.addEventListener('click', async () => {
-  const email = loginEmail.value.trim();
-  if (!email) { setLoginMsg('Enter your email address.', true); return; }
-
-  loginBtn.disabled = true;
-  setLoginMsg('Sending...');
-
-  try {
-    const { error } = await sbClient.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.origin }
-    });
-    if (error) throw error;
-    setLoginMsg('Magic link sent! Check your email.');
-  } catch (err) {
-    setLoginMsg(err.message || 'Something went wrong.', true);
-  } finally {
-    loginBtn.disabled = false;
-  }
-});
-
-loginEmail.addEventListener('keydown', e => {
-  if (e.key === 'Enter') loginBtn.click();
-});
-
-function setLoginMsg(text, isError = false) {
-  loginMsg.textContent = text;
-  loginMsg.className = isError ? 'error' : '';
-}
-
-// ─── Logout ───────────────────────────────────────────────────────────────────
-logoutBtn.addEventListener('click', async () => {
-  closePanel();
-  await sbClient.auth.signOut();
-});
-
-// ─── Service Worker ───────────────────────────────────────────────────────────
-function registerSW() {
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(console.error);
-  }
-}
 
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 function addMessage(text, sender) {
@@ -141,7 +45,7 @@ function addFileBubble(fileName) {
 
 async function loadHistory() {
   try {
-    const res = await fetch('/api/history', { headers: authHeaders() });
+    const res  = await fetch('/api/history');
     const data = await res.json();
     if (data.messages && data.messages.length > 0) {
       messagesEl.innerHTML = '';
@@ -177,9 +81,9 @@ async function sendMessage() {
   const loadingBubble = addMessage('...', 'v');
 
   try {
-    const res = await fetch('/api/chat', {
+    const res  = await fetch('/api/chat', {
       method: 'POST',
-      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
     const data = await res.json();
@@ -250,22 +154,16 @@ memoryBtn.addEventListener('click', openPanel);
 closePanelBtn.addEventListener('click', closePanel);
 overlay.addEventListener('click', e => { if (e.target === overlay) closePanel(); });
 
-function openPanel() {
-  overlay.classList.add('open');
-  loadPanel();
-}
-
-function closePanel() {
-  overlay.classList.remove('open');
-}
+function openPanel() { overlay.classList.add('open'); loadPanel(); }
+function closePanel() { overlay.classList.remove('open'); }
 
 async function loadPanel() {
   notesList.innerHTML    = '<p class="empty-state">Loading...</p>';
   memoriesList.innerHTML = '<p class="empty-state">Loading...</p>';
   try {
     const [nr, mr] = await Promise.all([
-      fetch('/api/notes',  { headers: authHeaders() }).then(r => r.json()),
-      fetch('/api/memory', { headers: authHeaders() }).then(r => r.json())
+      fetch('/api/notes').then(r => r.json()),
+      fetch('/api/memory').then(r => r.json())
     ]);
     renderNotes(nr.notes ?? []);
     renderMemories(mr.messages ?? []);
@@ -282,15 +180,15 @@ function renderNotes(notes) {
 }
 
 function buildNoteCard(note) {
-  const card = document.createElement('div');
-  card.classList.add('card');
+  const card    = document.createElement('div'); card.classList.add('card');
   const content = el('div', 'card-content', note.content);
   const footer  = document.createElement('div'); footer.classList.add('card-footer');
   const date    = el('span', 'card-date', fmtDate(note.created_at));
   const actions = document.createElement('div'); actions.classList.add('card-actions');
-  const editBtn = btn('Edit', 'card-btn', () => startEditNote(card, note));
-  const delBtn  = btn('Delete', 'card-btn delete', () => deleteNote(note.id, card));
-  actions.append(editBtn, delBtn);
+  actions.append(
+    btn('Edit',   'card-btn',        () => startEditNote(card, note)),
+    btn('Delete', 'card-btn delete', () => deleteNote(note.id, card))
+  );
   footer.append(date, actions);
   card.append(content, footer);
   return card;
@@ -298,17 +196,17 @@ function buildNoteCard(note) {
 
 function startEditNote(card, note) {
   card.innerHTML = '';
-  const ta = textarea(note.content, 3);
+  const ta   = textarea(note.content, 3);
   const save = btn('Save', 'card-save-btn', async () => {
     const v = ta.value.trim(); if (!v) return;
-    await fetch('/api/notes', { method: 'PUT', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({id:note.id,content:v}) });
+    await fetch('/api/notes', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id:note.id,content:v}) });
     note.content = v; card.replaceWith(buildNoteCard(note));
   });
   card.append(ta, save); ta.focus();
 }
 
 async function deleteNote(id, card) {
-  await fetch(`/api/notes?id=${id}`, { method: 'DELETE', headers: authHeaders() });
+  await fetch(`/api/notes?id=${id}`, { method: 'DELETE' });
   card.remove();
   if (!notesList.querySelector('.card')) notesList.innerHTML = '<p class="empty-state">No notes yet.</p>';
 }
@@ -316,7 +214,7 @@ async function deleteNote(id, card) {
 addNoteBtn.addEventListener('click', async () => {
   const content = newNoteInput.value.trim(); if (!content) return;
   newNoteInput.value = '';
-  const res  = await fetch('/api/notes', { method: 'POST', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({content}) });
+  const res  = await fetch('/api/notes', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({content}) });
   const data = await res.json();
   if (data.note) {
     notesList.querySelector('.empty-state')?.remove();
@@ -337,31 +235,33 @@ function buildMemoryCard(msg) {
   const footer  = document.createElement('div'); footer.classList.add('card-footer');
   const info    = el('span', 'card-date', `${msg.role==='user'?'You':'V'} · ${fmtDate(msg.created_at)}`);
   const actions = document.createElement('div'); actions.classList.add('card-actions');
-  const editBtn = btn('Edit', 'card-btn', () => startEditMemory(card, msg));
-  const delBtn  = btn('Delete', 'card-btn delete', () => deleteMemory(msg.id, card));
-  actions.append(editBtn, delBtn); footer.append(info, actions);
+  actions.append(
+    btn('Edit',   'card-btn',        () => startEditMemory(card, msg)),
+    btn('Delete', 'card-btn delete', () => deleteMemory(msg.id, card))
+  );
+  footer.append(info, actions);
   card.append(content, footer);
   return card;
 }
 
 function startEditMemory(card, msg) {
   card.innerHTML = '';
-  const ta = textarea(msg.content, 3);
+  const ta   = textarea(msg.content, 3);
   const save = btn('Save', 'card-save-btn', async () => {
     const v = ta.value.trim(); if (!v) return;
-    await fetch('/api/memory', { method: 'PUT', headers: authHeaders({'Content-Type':'application/json'}), body: JSON.stringify({id:msg.id,content:v}) });
+    await fetch('/api/memory', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id:msg.id,content:v}) });
     msg.content = v; card.replaceWith(buildMemoryCard(msg));
   });
   card.append(ta, save); ta.focus();
 }
 
 async function deleteMemory(id, card) {
-  await fetch(`/api/memory?id=${id}`, { method: 'DELETE', headers: authHeaders() });
+  await fetch(`/api/memory?id=${id}`, { method: 'DELETE' });
   card.remove();
   if (!memoriesList.querySelector('.card')) memoriesList.innerHTML = '<p class="empty-state">No conversation history yet.</p>';
 }
 
-// ─── DOM helpers ──────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function el(tag, cls, text) {
   const e = document.createElement(tag); e.className = cls; if (text) e.textContent = text; return e;
 }
@@ -376,5 +276,10 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleDateString(undefined, {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
 }
 
+// ─── PWA service worker ───────────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(console.error);
+}
+
 // ─── Start ────────────────────────────────────────────────────────────────────
-init();
+loadHistory();

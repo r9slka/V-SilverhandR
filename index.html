@@ -18,20 +18,7 @@
 </head>
 <body>
 
-  <!-- ── Login Screen ──────────────────────────────────── -->
-  <div id="login-screen">
-    <div id="login-box">
-      <div id="login-logo">V</div>
-      <div id="login-title">V Silverhand</div>
-      <div id="login-sub">Your private AI companion.</div>
-      <input id="login-email" type="email" placeholder="your@email.com" autocomplete="email" />
-      <button id="login-btn">Send Magic Link</button>
-      <p id="login-msg"></p>
-    </div>
-  </div>
-
-  <!-- ── Main App ──────────────────────────────────────── -->
-  <div id="app" class="hidden">
+  <div id="app">
 
     <header id="header">
       <span id="header-title">V Silverhand</span>
@@ -58,7 +45,7 @@
 
   </div>
 
-  <!-- ── Memory Panel ──────────────────────────────────── -->
+  <!-- Memory Panel -->
   <div id="memory-overlay">
     <div id="memory-panel">
       <div class="panel-header">
@@ -83,19 +70,12 @@
           <div id="memories-list"></div>
         </div>
 
-        <div class="panel-footer">
-          <button id="logout-btn">Sign out</button>
-        </div>
-
       </div>
     </div>
   </div>
 
-  <!-- Supabase JS -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <!-- PDF.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-
   <script src="app.js"></script>
 </body>
 </html>
