@@ -12,6 +12,12 @@ Most chatbots forget everything the moment you close the tab. V Silverhand keeps
 
 ---
 
+## Why I built this
+
+V Silverhand grew out of my love for the world of Cyberpunk 2077 — the idea of a loyal, tailor-made digital companion immediately clicked with me. I wanted to explore a field I was genuinely excited about, understand how all of it actually works, and see how far I could get in one weekend. Beyond the nod to the game, I genuinely believe a truly private, personal AI assistant is an idea worth building toward — a small forward-looking project, in my own way. This project confirmed something I believe in: with a clear idea, curiosity, and the right tools, you can turn what you imagine into something real and functional.
+
+---
+
 ## Features
 
 - **Real-time chat** with a defined AI personality

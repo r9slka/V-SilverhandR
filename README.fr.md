@@ -12,6 +12,12 @@ La plupart des chatbots oublient tout dès qu'on ferme l'onglet. V Silverhand ga
 
 ---
 
+## Pourquoi ce projet
+
+V Silverhand est né de mon attachement à l'univers de Cyberpunk 2077 — l'idée d'un compagnon numérique loyal, taillé sur mesure, m'a tout de suite parlé. Je voulais explorer un domaine qui me passionnait, comprendre comment tout ça fonctionne réellement, et voir jusqu'où je pouvais aller en un week-end. Au-delà du clin d'œil au jeu, je crois sincèrement qu'un assistant IA réellement privé et personnel est une idée d'avenir — un petit projet avant-gardiste, à ma façon. Ce projet m'a confirmé une conviction : avec une idée claire, de la curiosité et les bons outils, on peut transformer ce qu'on imagine en quelque chose de réel et fonctionnel.
+
+---
+
 ## Fonctionnalités
 
 - **Chat en temps réel** avec une personnalité IA définie
