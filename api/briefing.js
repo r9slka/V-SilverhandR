@@ -32,7 +32,7 @@ module.exports = async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const apiKey      = process.env.API_KEY;
+  const apiKey      = process.env.API_KEY || process.env.GEMINI_API_KEY;
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
