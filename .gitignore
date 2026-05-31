@@ -1,0 +1,29 @@
+# Environment variables
+.env
+.env.local
+.env*.local
+
+# Keys and secrets
+*.key
+*.pem
+API key.txt
+
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+dist/
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.swp
+
+# Claude Code local settings
+.claude/settings.local.json
+.claude/worktrees/
